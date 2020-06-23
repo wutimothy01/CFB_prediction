@@ -8,8 +8,6 @@ import pandas as pd
 from bs4 import BeautifulSoup
 import requests
 import csv
-import re
-from datetime import datetime
 import os
 
 '''
@@ -28,7 +26,7 @@ Scrape the following stats:
     Redzone Conversions
     Opponent Redzone Conversions
 '''
-
+#headers for corresponding stats (offense and defense have same headers)
 score_header = ['Rank', 'Name', 'G', 'TD', 'FG', '1XP', '2XP', 'Safety', 'Points', 'Points/G']
 
 rush_header = ['Rank', 'Name', 'G', 'Att', 'Yards', 'Avg', 'TD', 'Att/G', 'Yards/G']
@@ -43,41 +41,76 @@ third_conversions_header = ['Rank', 'Name', 'G', 'Attempts', 'Conversions', 'Con
 
 redzone_header = ['Rank', 'Name', 'G', 'Attempts', 'Scores', 'Score %', 'TD', 'TD %', 'FG', 'FG %']
 
+# dictionary that converts number in url to month want to scrape
 months = {15: 'August-September', 16: 'October', 17: 'November', 18: 'December'}
+
+# dictionary that converts the type of stat into the number corresponding in the url as well as the corresponding header for the dataframe
 modes = {'score': ('09', score_header), 'rush': ('01', rush_header), 'pass': ('02', pass_header), 'turnover': ('12', turnover_header), 
     'penalties': ('14', penalties_header), '3rd': ('25', third_conversions_header), 'red': ('27', redzone_header)}
+
+# array that corresponds to either offense or defense side
 sides = ['offense', 'defense']
 
+'''
+takes the type of stat, the year, the month, and offense or defense and scrapes the stats on the corresponding page, saving it as a csv 
+with corresponding name
 
+key: the key to the dictionary that lists all the types of stats to track
+year: the specific year we are looking at
+month: the specific month we are looking at
+side: either offense or defense (team's vs opponent's) for most stats except turnovers
+
+csv file is in the form: data-year-month-side-key.csv
+'''
 def getData(key, year, month, side):
+    # url based on the parameters
     url = 'http://www.cfbstats.com/' + str(year) + '/leader/national/team/' + side + '/split' + str(month) + '/category' + modes[key][0] + '/sort01.html'
+    
+    # transform the url into soup
     r = requests.get(url)
     data = r.text
     soup = BeautifulSoup(data, "html.parser")
     table = soup.find('table')
     all_rows = []
+    
+    # scrape the stats into the array all_rows
     for trs in table.find_all('tr'):
         tds = trs.find_all('td')
         row = [cell.text.strip() for cell in tds]
+        # only add the row if its not empty
         if row:
             all_rows.append(row)
+    
+    # convert the array into a dataframe
     df = pd.DataFrame(data=all_rows, columns = modes[key][1])
+    # set the index to the Rank
     df.set_index(['Rank'], drop=True, inplace=True)
-    df.to_csv('data-' + str(year) + '-' + months[month] + '-' + side + '-' + key + '.csv', encoding = 'utf-8')
-    print('data-' + str(year) + '-' + months[month] + '-' + side + '-' + key + '.csv done')
+    # import the stats to a csv file and encode it
+    df.to_csv('{}-{}-{}-{}.csv'.format(year, months[month], side, key), encoding = 'utf-8')
+    # print to say we are done
+    print('{}-{}-{}-{}.csv done'.format(year, months[month], side, key))
+    
 
+# changes path to current working directory and if the Data folder doesn't exist, make it and change to data folder to store data
 os.getcwd()
+if not os.path.exists('Data'):
+    os.mkdir('Data')
 os.chdir('Data')
 
+# for each year from 2009 to 2020
 for year in range(2009, 2020):
+    # for each type of stat want to check
     for key in modes:
+        # for each month from August to December
         for month in months:
+            # if its turnover only do offense otherwise do both offense and defense
             if key == 'turnover':
+                # get the data with the specified parameters
                 getData(key, year, month, sides[0])              
             else:
                 for side in sides:
                     getData(key, year, month, side)
 
-# test the scraper with just one scrape
+# test the scraper with just one possibility rather than all
 #getData('score', 2019, 15, 'offense')
 
