@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import requests
 import csv
 import os
+import datetime
 
 '''
 Scrape the following stats:
@@ -62,7 +63,7 @@ side: either offense or defense (team's vs opponent's) for most stats except tur
 
 csv file is in the form: data-year-month-side-key.csv
 '''
-def getData(key, year, month, side):
+def getRawData(key, year, month, side):
     # url based on the parameters
     url = 'http://www.cfbstats.com/' + str(year) + '/leader/national/team/' + side + '/split' + str(month) + '/category' + modes[key][0] + '/sort01.html'
     
@@ -91,26 +92,100 @@ def getData(key, year, month, side):
     print('{}-{}-{}-{}.csv done'.format(year, months[month], side, key))
     
 
+def scrape_raw_data():
+    # for each year from 2009 to 2020
+    for year in range(2009, 2020):
+        # for each type of stat want to check
+        for key in modes:
+            # for each month from August to December
+            for month in months:
+                # if its turnover only do offense otherwise do both offense and defense
+                if key == 'turnover':
+                    # get the data with the specified parameters
+                    getRawData(key, year, month, sides[0])              
+                else:
+                    for side in sides:
+                        getRawData(key, year, month, side)
+
+schedule_header_modern = ['Week', 'Date', 'Time', 'Day', 'Home', 'HomePts', 'Where', 'Away', 'AwayPts', 'Notes']
+schedule_header_old = ['Week', 'Date', 'Day', 'Home', 'HomePts', 'Where', 'Away', 'AwayPts', 'Notes']
+def scrape_schedule(year):
+    url = 'https://www.sports-reference.com/cfb/years/' + str(year) + '-schedule.html'
+    
+    # transform the url into soup
+    r = requests.get(url)
+    data = r.text
+    soup = BeautifulSoup(data, "html.parser")
+    table = soup.find('table')
+    all_rows = []
+
+    # scrape the schedule into the array all_rows
+    for trs in table.find_all('tr'):
+        tds = trs.find_all('td')
+        row = [cell.text.strip() for cell in tds]
+        # only add the row if its not empty
+        if row:
+            all_rows.append(row)
+    
+    # convert the array into a dataframe
+    if year < 2013:
+        df = pd.DataFrame(data=all_rows, columns = schedule_header_old)
+    else:
+        df = pd.DataFrame(data=all_rows, columns = schedule_header_modern)
+    # parse out the month and year
+    df['Month'] = df['Date'].str.slice(stop=3)
+    df['Year'] = df['Date'].str.slice(start=7)
+
+    #take out ranking (8) from ranked teams 
+    for elem in range(df['Home'].size):
+        if '(' in df.at[elem, 'Home'][0:1]:
+            df.at[elem, 'Home'] = df.at[elem, 'Home'].split(')', 1)[1].strip()
+    for elem in range(df['Away'].size):
+        if '(' in df.at[elem, 'Away'][0:1]:
+            df.at[elem, 'Away'] = df.at[elem, 'Away'].split(')', 1)[1].strip()
+
+    #swap home and away if in wrong order
+    idx = (df['Where'] == '@')
+    df.loc[idx, ['Home', 'Away']] = df.loc[idx, ['Away', 'Home']].values
+
+    #set the index to the month and year
+    df.set_index(['Month', 'Year'], drop=True, inplace=True)
+
+    #drop unnecessary columns
+    if year < 2013: 
+        df.drop(columns=['Week', 'Date', 'Day', 'Where', 'Notes'], inplace=True)
+    else:
+        df.drop(columns=['Week', 'Date', 'Time', 'Day', 'Where', 'Notes'], inplace=True)
+    # import the stats to a csv file and encode it
+    df.to_csv('schedule' + str(year) + '.csv', encoding = 'utf-8')
+    # print to say we are done
+    print('schedule' + str(year) + '.csv done')
+
+def scrape_raw_schedule():
+    for year in range(2009, 2020):
+        scrape_schedule(year)
+
+
 # changes path to current working directory and if the Data folder doesn't exist, make it and change to data folder to store data
 os.getcwd()
 if not os.path.exists('Data'):
     os.mkdir('Data')
+if not os.path.exists('Schedule'):
+    os.mkdir('Schedule')
 os.chdir('Data')
-
-# for each year from 2009 to 2020
-for year in range(2009, 2020):
-    # for each type of stat want to check
-    for key in modes:
-        # for each month from August to December
-        for month in months:
-            # if its turnover only do offense otherwise do both offense and defense
-            if key == 'turnover':
-                # get the data with the specified parameters
-                getData(key, year, month, sides[0])              
-            else:
-                for side in sides:
-                    getData(key, year, month, side)
+#comment this to not have it scrape 10 years worth of data again
+#scrape_raw_data()
 
 # test the scraper with just one possibility rather than all
 #getData('score', 2019, 15, 'offense')
+
+#change path to schedule to store data
+os.chdir('../Schedule')
+
+#comment this to not have it scrape 10 years worth of schedules again
+scrape_raw_schedule()
+
+#test the schedule scraper with just one possibility
+#scrape_schedule(2019)
+
 
