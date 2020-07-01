@@ -107,6 +107,42 @@ def scrape_raw_data():
                     for side in sides:
                         getRawData(key, year, month, side)
 
+#fix bad names in schedule to match
+def fix_names(name):
+    if name == 'Louisiana':
+        return 'Louisiana-Lafayette'
+    if name == 'Middle Tennessee State':
+        return 'Middle Tennessee'
+    if name == 'Nevada-Las Vegas':
+        return 'UNLV'
+    if name == 'Brigham Young':
+        return 'BYU'
+    if name == 'Miami (FL)':
+        return 'Miami (Florida)'
+    if name == 'Miami (OH)':
+        return 'Miami (Ohio)'
+    if name == 'Southern Methodist':
+        return 'SMU'
+    if name == 'Louisiana State':
+        return 'LSU'
+    if name == 'Alabama-Birmingham':
+        return 'UAB'
+    if name == 'Hawaii':
+        return "Hawai'i"
+    if name == 'Central Florida':
+        return 'UCF'
+    if name == 'Texas Christian':
+        return 'TCU'
+    if name == 'Texas-San Antonio':
+        return 'UTSA'
+    if name == 'Texas-El Paso':
+        return 'UTEP'
+    if name == 'Southern California':
+        return 'USC'
+    if name == 'Bowling Green State':
+        return 'Bowling Green'
+    return name
+
 schedule_header_modern = ['Week', 'Date', 'Time', 'Day', 'Home', 'HomePts', 'Where', 'Away', 'AwayPts', 'Notes']
 schedule_header_old = ['Week', 'Date', 'Day', 'Home', 'HomePts', 'Where', 'Away', 'AwayPts', 'Notes']
 def scrape_schedule(year):
@@ -135,14 +171,23 @@ def scrape_schedule(year):
     # parse out the month and year
     df['Month'] = df['Date'].str.slice(stop=3)
     df['Year'] = df['Date'].str.slice(start=7)
-
+    
     #take out ranking (8) from ranked teams 
-    for elem in range(df['Home'].size):
-        if '(' in df.at[elem, 'Home'][0:1]:
-            df.at[elem, 'Home'] = df.at[elem, 'Home'].split(')', 1)[1].strip()
-    for elem in range(df['Away'].size):
-        if '(' in df.at[elem, 'Away'][0:1]:
-            df.at[elem, 'Away'] = df.at[elem, 'Away'].split(')', 1)[1].strip()
+    for index, row in df.iterrows():
+        if '(' in row['Home'][0:1]:
+            row['Home'] = row['Home'].split(')', 1)[1].strip()
+        if '(' in row['Away'][0:1]:
+            row['Away'] = row['Away'].split(')', 1)[1].strip()
+
+    #fix schedule names to match with raw stats names
+    df['Home'] = df['Home'].apply(fix_names)
+    df['Away'] = df['Away'].apply(fix_names)
+
+    #drop schools that suck
+    newdf = pd.read_csv(str(year) + '-November-defense-red.csv')
+    for index, row in df.iterrows():
+        if (row['Home'] not in newdf['Name'].unique()) or (row['Away'] not in newdf['Name'].unique()):
+            df.drop(index, inplace=True)
 
     #swap home and away if in wrong order
     idx = (df['Where'] == '@')
@@ -156,11 +201,15 @@ def scrape_schedule(year):
         df.drop(columns=['Week', 'Date', 'Day', 'Where', 'Notes'], inplace=True)
     else:
         df.drop(columns=['Week', 'Date', 'Time', 'Day', 'Where', 'Notes'], inplace=True)
+    #change path to schedule to store data
+    os.chdir('../Schedule')
     # import the stats to a csv file and encode it
     df.to_csv('schedule' + str(year) + '.csv', encoding = 'utf-8')
     # print to say we are done
     print('schedule' + str(year) + '.csv done')
+    os.chdir('../Data')
 
+#scrape schedule from 2009 to 2020
 def scrape_raw_schedule():
     for year in range(2009, 2020):
         scrape_schedule(year)
@@ -178,9 +227,6 @@ os.chdir('Data')
 
 # test the scraper with just one possibility rather than all
 #getData('score', 2019, 15, 'offense')
-
-#change path to schedule to store data
-os.chdir('../Schedule')
 
 #comment this to not have it scrape 10 years worth of schedules again
 scrape_raw_schedule()
