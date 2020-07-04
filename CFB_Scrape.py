@@ -1,5 +1,7 @@
 '''
-A web scraper to scrape for College Football Stats
+A web scraper to scrape for College Football Stats,
+scrape the schedules from 2009 - 2020
+and prepare the schedule data for the model
 @author: Timothy Wu, Jasper Wu
 '''
 
@@ -9,7 +11,6 @@ from bs4 import BeautifulSoup
 import requests
 import csv
 import os
-import datetime
 
 '''
 Scrape the following stats:
@@ -229,9 +230,10 @@ os.chdir('Data')
 #getData('score', 2019, 15, 'offense')
 
 #comment this to not have it scrape 10 years worth of schedules again
-scrape_raw_schedule()
+#scrape_raw_schedule()
 
 #test the schedule scraper with just one possibility
 #scrape_schedule(2019)
+
 
 
