@@ -1,7 +1,6 @@
 '''
-A web scraper to scrape for College Football Stats,
-scrape the schedules from 2009 - 2020
-and prepare the schedule data for the model
+Scrape and manipulate data into final aggregate datasets for the model
+Scrape and manipulate schedule data into final dataset for the model
 @author: Timothy Wu, Jasper Wu
 '''
 
@@ -44,25 +43,25 @@ third_conversions_header = ['Rank', 'Name', 'G', 'Attempts', 'Conversions', 'Con
 redzone_header = ['Rank', 'Name', 'G', 'Attempts', 'Scores', 'Score %', 'TD', 'TD %', 'FG', 'FG %']
 
 # dictionary that converts number in url to month want to scrape
-months = {15: 'August-September', 16: 'October', 17: 'November', 18: 'December'}
+months = {15: 'Aug-Sep', 16: 'Oct', 17: 'Nov', 18: 'Dec-Jan'}
 
 # dictionary that converts the type of stat into the number corresponding in the url as well as the corresponding header for the dataframe
-modes = {'score': ('09', score_header), 'rush': ('01', rush_header), 'pass': ('02', pass_header), 'turnover': ('12', turnover_header), 
+modes = {'turnover': ('12', turnover_header), 'score': ('09', score_header), 'rush': ('01', rush_header), 'pass': ('02', pass_header),
     'penalties': ('14', penalties_header), '3rd': ('25', third_conversions_header), 'red': ('27', redzone_header)}
 
 # array that corresponds to either offense or defense side
 sides = ['offense', 'defense']
 
 '''
-takes the type of stat, the year, the month, and offense or defense and scrapes the stats on the corresponding page, saving it as a csv 
-with corresponding name
+takes the type of stat, the year, the month, and offense or defense and scrapes the stats on the corresponding page,
+returning a dataframe with the stats
 
 key: the key to the dictionary that lists all the types of stats to track
 year: the specific year we are looking at
 month: the specific month we are looking at
 side: either offense or defense (team's vs opponent's) for most stats except turnovers
 
-csv file is in the form: data-year-month-side-key.csv
+returns a dataframe for the corresponding stat for the corresponding side of offense for the corresponding month and year
 '''
 def getRawData(key, year, month, side):
     # url based on the parameters
@@ -85,29 +84,21 @@ def getRawData(key, year, month, side):
     
     # convert the array into a dataframe
     df = pd.DataFrame(data=all_rows, columns = modes[key][1])
-    # set the index to the Rank
-    df.set_index(['Rank'], drop=True, inplace=True)
-    # import the stats to a csv file and encode it
-    df.to_csv('{}-{}-{}-{}.csv'.format(year, months[month], side, key), encoding = 'utf-8')
+    # save the names to use for schedule scrape
+    if month == 17 and key == 'score' and side == 'offense':
+        df.to_csv('../Names/{}.csv'.format(year))
+    # set the index to the names
+    df.set_index(['Name'], drop=True, inplace=True)
+    # drop the columns of rank as well as the per game and percentage stats since they cannot be aggregated
+    df.drop(columns=['Rank'], inplace=True)
+    df.drop(columns=[col for col in df.columns if '%' in col or '/G' in col], inplace=True)
+    # add an ending to the column headers to be able to distinguish
+    df = df.add_suffix('_{}_{}'.format(key, side))
     # print to say we are done
-    print('{}-{}-{}-{}.csv done'.format(year, months[month], side, key))
+    print('Scraped {}-{}-{}-{}'.format(year, months[month], key, side))
+    # return the dataframe
+    return df
     
-
-def scrape_raw_data():
-    # for each year from 2009 to 2020
-    for year in range(2009, 2020):
-        # for each type of stat want to check
-        for key in modes:
-            # for each month from August to December
-            for month in months:
-                # if its turnover only do offense otherwise do both offense and defense
-                if key == 'turnover':
-                    # get the data with the specified parameters
-                    getRawData(key, year, month, sides[0])              
-                else:
-                    for side in sides:
-                        getRawData(key, year, month, side)
-
 #fix bad names in schedule to match
 def fix_names(name):
     if name == 'Louisiana':
@@ -146,6 +137,12 @@ def fix_names(name):
 
 schedule_header_modern = ['Week', 'Date', 'Time', 'Day', 'Home', 'HomePts', 'Where', 'Away', 'AwayPts', 'Notes']
 schedule_header_old = ['Week', 'Date', 'Day', 'Home', 'HomePts', 'Where', 'Away', 'AwayPts', 'Notes']
+
+'''
+scrapes the schedule for the year
+takes out irrelevant teams and edits the file to make sure home and away are correct and who won
+return dataframe with info
+'''
 def scrape_schedule(year):
     url = 'https://www.sports-reference.com/cfb/years/' + str(year) + '-schedule.html'
     
@@ -172,6 +169,13 @@ def scrape_schedule(year):
     # parse out the month and year
     df['Month'] = df['Date'].str.slice(stop=3)
     df['Year'] = df['Date'].str.slice(start=7)
+
+    # aggregate August and September together and December and January together
+    for index, row in df.iterrows():
+        if 'Sep' in row['Month'] or 'Aug' in row['Month']:
+            row['Month'] = 'Aug-Sep'
+        if 'Dec' in row['Month'] or 'Jan' in row['Month']:
+            row['Month'] = 'Dec-Jan'
     
     #take out ranking (8) from ranked teams 
     for index, row in df.iterrows():
@@ -185,17 +189,23 @@ def scrape_schedule(year):
     df['Away'] = df['Away'].apply(fix_names)
 
     #drop schools that suck
-    newdf = pd.read_csv(str(year) + '-November-defense-red.csv')
+    names = pd.read_csv('../Names/{}.csv'.format(year))
     for index, row in df.iterrows():
-        if (row['Home'] not in newdf['Name'].unique()) or (row['Away'] not in newdf['Name'].unique()):
+        if (row['Home'] not in names['Name'].unique()) or (row['Away'] not in names['Name'].unique()):
             df.drop(index, inplace=True)
 
     #swap home and away if in wrong order
+    
     idx = (df['Where'] == '@')
     df.loc[idx, ['Home', 'Away']] = df.loc[idx, ['Away', 'Home']].values
+    df.loc[idx, ['HomePts', 'AwayPts']] = df.loc[idx, ['AwayPts', 'HomePts']].values
 
     #set the index to the month and year
     df.set_index(['Month', 'Year'], drop=True, inplace=True)
+    #check who wins (1 = home won, 0 = away won)
+    df['HomeWin'] = 0
+    index = (df['HomePts'] > df['AwayPts'])
+    df.loc[index, ['HomeWin']] = 1
 
     #drop unnecessary columns
     if year < 2013: 
@@ -208,32 +218,66 @@ def scrape_schedule(year):
     df.to_csv('schedule' + str(year) + '.csv', encoding = 'utf-8')
     # print to say we are done
     print('schedule' + str(year) + '.csv done')
-    os.chdir('../Data')
+    os.chdir('../AggregateData')
 
 #scrape schedule from 2009 to 2020
 def scrape_raw_schedule():
     for year in range(2009, 2020):
         scrape_schedule(year)
 
+def scrape_raw_data():
+    # for each year from 2009 to 2020
+    for year in range(2009, 2020):
+        aggregate = pd.DataFrame()
+        # for each month
+        for month in months:
+            # for each type of stat want to check
+            oneMonth = pd.DataFrame()
+            for key in modes:
+                # if its turnover only do offense otherwise do both offense and defense
+                if key == 'turnover':
+                    # start with turnover and start the joined dataframe for the month
+                    oneMonth = getRawData(key, year, month, sides[0])        
+                else:
+                    for side in sides:
+                        temp = getRawData(key, year, month, side)
+                        #join the data to the ongoing dataframe of all stats for the month
+                        oneMonth = oneMonth.join(temp)
+            #change to numeric numbers so we can add
+            oneMonth = oneMonth.apply(pd.to_numeric)     
+            #aggregate it to set up for predictions
+            aggregate = aggregate.add(oneMonth, fill_value=0)
+            #save to a csv file with the corresponding predictions for the future
+            if month < 18:
+                aggregate.to_csv('{}-{}-Predictions.csv'.format(months[month+1], year), encoding = 'utf-8')
+                print('aggregate-data-{}-{}-Predictions.csv'.format(months[month+1], year))
+            else:
+                aggregate.to_csv('Aug-Sep-{}-Predictions.csv'.format(year+1), encoding = 'utf-8')
+                print('aggregate-data-Aug-Sep-{}-Predictions.csv'.format(year+1))
+
+            #edit the dataframe to be per game by dividing by how many games played
+            aggregatepergame = aggregate.div(aggregate['G_turnover_offense'], axis='index')
+            aggregatepergame.drop(columns=[col for col in aggregatepergame.columns if 'G_' in col[0:2]], inplace=True)
+            #save to a csv file for corresponding prediction month and year for per game data
+            if month < 18:
+                aggregatepergame.to_csv('{}-{}-Predictions-Per-Game.csv'.format(months[month+1], year), encoding = 'utf-8')
+                print('aggregate-data-{}-{}-Predictions-Per-Game.csv'.format(months[month+1], year))
+            else:
+                aggregatepergame.to_csv('Aug-Sep-{}-Predictions-Per-Game.csv'.format(year+1), encoding = 'utf-8')
+                print('aggregate-data-Aug-Sep-{}-Predictions-Per-Game.csv'.format(year+1))
+
+
 
 # changes path to current working directory and if the Data folder doesn't exist, make it and change to data folder to store data
 os.getcwd()
-if not os.path.exists('Data'):
-    os.mkdir('Data')
+if not os.path.exists('AggregateData'):
+    os.mkdir('AggregateData')
 if not os.path.exists('Schedule'):
     os.mkdir('Schedule')
-os.chdir('Data')
-#comment this to not have it scrape 10 years worth of data again
-#scrape_raw_data()
+if not os.path.exists('Names'):
+    os.mkdir('Names')
+os.chdir('AggregateData')
 
-# test the scraper with just one possibility rather than all
-#getData('score', 2019, 15, 'offense')
-
-#comment this to not have it scrape 10 years worth of schedules again
-#scrape_raw_schedule()
-
-#test the schedule scraper with just one possibility
-#scrape_schedule(2019)
-
-
-
+#run the program, comment out what to run and what not to run
+scrape_raw_data()
+scrape_raw_schedule()
