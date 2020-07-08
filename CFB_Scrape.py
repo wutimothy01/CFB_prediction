@@ -91,7 +91,7 @@ def getRawData(key, year, month, side):
     df.set_index(['Name'], drop=True, inplace=True)
     # drop the columns of rank as well as the per game and percentage stats since they cannot be aggregated
     df.drop(columns=['Rank'], inplace=True)
-    df.drop(columns=[col for col in df.columns if '%' in col or '/G' in col], inplace=True)
+    df.drop(columns=[col for col in df.columns if '%' in col or '/G' in col or 'Avg' in col or 'Pct' in col or '/Att' in col or 'Rating' in col], inplace=True)
     # add an ending to the column headers to be able to distinguish
     df = df.add_suffix('_{}_{}'.format(key, side))
     # print to say we are done
