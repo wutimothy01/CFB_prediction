@@ -14,6 +14,29 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 os.getcwd()
+months = ['Oct', 'Nov', 'Dec-Jan']
+def finalizedData():
+    df = pd.DataFrame()
+    for year in range(2009, 2020):
+        schedule = pd.read_csv('Schedule/schedule{}.csv'.format(year))
+        if year == 2010:
+            months.insert(0, 'Aug-Sep')
+        for month in months:
+            rawdata = pd.read_csv('AggregateData/{}-{}-Predictions-Per-Game.csv'.format(month, year))
+            index = (schedule['Month'] == month)
+            temp = schedule.loc[index]
+
+            temp.set_index(['Home'], drop=True, inplace=True)
+            rawdata.set_index(['Name'], drop=True, inplace=True)
+            temp = temp.join(rawdata)
+
+            temp.set_index(['Away'], drop=True, inplace=True)
+            temp = temp.join(rawdata, rsuffix='_Away')
+            df = df.append(temp, ignore_index=True)
+    df.to_csv('AllData.csv', encoding='utf-8')
+
+finalizedData()
+
 
 df = pd.read_csv('AllData.csv')
 y = df['HomeWin']
