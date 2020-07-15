@@ -47,7 +47,11 @@ df = df.drop(columns=['Fum. Gain_turnover_offense', 'Int. Gain_turnover_offense'
                         '2XP_score_offense_Away', 'Safety_score_offense_Away', '2XP_score_defense_Away', 'Safety_score_defense_Away'])
 '''
 
-features = list(df.columns[6:])
+#features = list(df.columns[6:])
+features = ['Margin_turnover_offense', 'Points_score_offense', 'Points_score_defense', 'Att_rush_offense', 'Yards_rush_offense', 'Yards_rush_defense',
+            'Yards_pass_offense', 'Yards_pass_defense', 'Pen_penalties_offense', 'Pen_penalties_defense', 'Margin_turnover_offense_Away', 'Points_score_offense_Away', 
+            'Points_score_defense_Away', 'Att_rush_offense_Away', 'Yards_rush_offense_Away', 'Yards_rush_defense_Away',
+            'Yards_pass_offense_Away', 'Yards_pass_defense_Away', 'Pen_penalties_offense_Away', 'Pen_penalties_defense_Away']
 X = df[features]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=812)
