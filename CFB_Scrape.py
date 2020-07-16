@@ -265,7 +265,27 @@ def scrape_raw_data():
             else:
                 aggregatepergame.to_csv('Aug-Sep-{}-Predictions-Per-Game.csv'.format(year+1), encoding = 'utf-8')
                 print('aggregate-data-Aug-Sep-{}-Predictions-Per-Game.csv'.format(year+1))
+def finalizedData():
+    months = ['Oct', 'Nov', 'Dec-Jan']
+    df = pd.DataFrame()
+    for year in range(2009, 2020):
+        schedule = pd.read_csv('Schedule/schedule{}.csv'.format(year))
+        if year == 2010:
+            months.insert(0, 'Aug-Sep')
+        for month in months:
+            rawdata = pd.read_csv('AggregateData/{}-{}-Predictions-Per-Game.csv'.format(month, year))
+            index = (schedule['Month'] == month)
+            temp = schedule.loc[index]
 
+            temp.set_index(['Home'], drop=True, inplace=True)
+            rawdata.set_index(['Name'], drop=True, inplace=True)
+            temp = temp.join(rawdata)
+
+            temp.set_index(['Away'], drop=True, inplace=True)
+            temp = temp.join(rawdata, rsuffix='_Away')
+            df = df.append(temp, ignore_index=True)
+    df.to_csv('AllData.csv', encoding='utf-8')
+    print('AllData.csv complete')
 
 
 # changes path to current working directory and if the Data folder doesn't exist, make it and change to data folder to store data
@@ -281,3 +301,5 @@ os.chdir('AggregateData')
 #run the program, comment out what to run and what not to run
 scrape_raw_data()
 scrape_raw_schedule()
+os.chdir('../')
+finalizedData()
